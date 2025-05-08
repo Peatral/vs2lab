@@ -25,11 +25,32 @@ class TestEchoService(unittest.TestCase):
         super().setUp()
         self.client = clientserver.Client()  # create new client for each test
 
-    def test_srv_get(self):  # each test_* function is a test
-        """Test simple call"""
+    def test_srv_unknown(self):  # each test_* function is a test
+        """Test unknown call"""
         msg = self.client.call("Hello VS2Lab")
-        self.assertEqual(msg, 'Hello VS2Lab*')
+        self.assertEqual(msg, 'ERROR: Unbekannter Befehl')
 
+    def test_srv_get(self):
+        """Test get call"""
+        msg = self.client.call("GET Patty")
+        self.assertEqual(msg, 'Patty: +49696969')
+    
+    def test_srv_getall(self):
+        """Test getall call"""
+        msg = self.client.call("GETALL")
+        self.assertEqual(msg, 'Patty: +49696969\nChrissy R: +49420110\nBjörn: +4900000')
+
+    def test_srv_get_empty(self):
+        """Test getall call"""
+        msg = self.client.call("GET ")
+        self.assertEqual(msg, 'ERROR: Der Name darf nicht leer sein')
+
+    def test_srv_get_invalid(self):
+        """Test getall call"""
+        msg = self.client.call("GET Fehler")
+        self.assertEqual(msg, 'ERROR: Nutzer Fehler in Datenbank nicht gefunden')
+  
+  
     def tearDown(self):
         self.client.close()  # terminate client after each test
 
