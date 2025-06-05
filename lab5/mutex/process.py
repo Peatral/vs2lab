@@ -2,7 +2,7 @@ import logging
 import random
 import time
 
-from constMutex import ENTER, RELEASE, ALLOW, ACTIVE
+from constMutex import ENTER, RELEASE, ALLOW, ACTIVE, PING, PONG
 
 
 class Process:
@@ -46,6 +46,8 @@ class Process:
         self.peer_name = 'unassigned'  # The original peer name
         self.peer_type = 'unassigned'  # A flag indicating behavior pattern
         self.logger = logging.getLogger("vs2lab.lab5.mutex.process.Process")
+        self.dead_processes: list = []
+        self.timedout = False
 
     def __mapid(self, id='-1'):
         # format channel member address
@@ -96,6 +98,27 @@ class Process:
             processes_with_later_message)
         return first_in_queue and all_have_answered
 
+    def __handle_fail(self):
+        if not self.timedout:
+            self.timedout = True
+
+            self.dead_processes = self.other_processes.copy()
+            msg = (self.clock, self.process_id, PING)
+            self.channel.send_to(self.other_processes, msg)
+            self.logger.info(f"{self.__mapid()}: Detected failure of process")
+        
+        else:
+            self.timedout = False
+            self.logger.info(f"{self.__mapid()}: Failed processes will be removed: {self.dead_processes}")
+            for dead in self.dead_processes:
+                self.all_processes.remove(dead)
+                self.other_processes.remove(dead)
+
+            self.queue = [msg for msg in self.queue if msg[1] not in self.dead_processes]
+
+            self.dead_processes.clear()
+
+
     def __receive(self):
         # Pick up any message
         _receive = self.channel.receive_from(self.other_processes, 3)
@@ -121,6 +144,12 @@ class Process:
                 # assure release requester indeed has access (his ENTER is first in queue)
                 assert self.queue[0][1] == msg[1] and self.queue[0][2] == ENTER, 'State error: inconsistent remote RELEASE'
                 del (self.queue[0])  # Just remove first message
+            elif msg[2] == PING:
+                msg = (self.clock, self.process_id, PONG)
+                self.channel.send_to([_receive[0]], msg)
+            elif msg[2] == PONG:
+                if _receive[0] in self.dead_processes:
+                    self.dead_processes.remove(_receive[0])
 
             self.__cleanup_queue()  # Finally sort and cleanup the queue
         else:
@@ -130,6 +159,8 @@ class Process:
                                         'Clock '+str(msg[0]),
                                         self.__mapid(msg[1]),
                                         msg[2]), self.queue))))
+            if len(self.queue) > 0:
+                self.__handle_fail()
 
     def init(self, peer_name, peer_type):
         self.channel.bind(self.process_id)
