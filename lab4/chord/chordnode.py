@@ -147,12 +147,23 @@ class ChordNode:
                 break
 
             if request[0] == constChord.LOOKUP_REQ:  # A lookup request
+                lookup_key = request[1]
+
                 self.logger.info("Node {:04n} received LOOKUP {:04n} from {:04n}."
-                                 .format(self.node_id, int(request[1]), int(sender)))
+                                 .format(self.node_id, int(lookup_key), int(sender)))
+
+                recipient = sender
+                if len(request) >= 3:
+                    recipient = request[2]
 
                 # look up and return local successor 
-                next_id: int = self.local_successor_node(request[1])
-                self.channel.send_to([sender], (constChord.LOOKUP_REP, next_id))
+                next_id: int = self.local_successor_node(lookup_key)
+                
+                if next_id == self.node_id:
+                    # Key belongs to this node
+                    self.channel.send_to([recipient], (constChord.LOOKUP_REP, next_id, lookup_key))
+                else:
+                    self.channel.send_to([str(next_id)], (constChord.LOOKUP_REQ, lookup_key, recipient))
 
                 # Finally do a sanity check
                 if not self.channel.exists(next_id):  # probe for existence
